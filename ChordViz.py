@@ -65,6 +65,8 @@ def play_waveform(w):
 
                     
 play_waveform.stream = None
+
+max_frequency = 22100  # we stop making notes above this
                 
 note_types = {
     "PureTone": lambda harmonic: 1 if harmonic==0 else 0,
@@ -263,8 +265,8 @@ def poisson(l, n):
 def notes_from_func(func, root):
     for h in itertools.count():
         mag = func(h)
-        # we cut off until we reach 22.1kHz
-        if root+root*h > 22100:
+        # we cut off until we reach max_frequency
+        if root+root*h > max_frequency:
             return
         yield root+root*h, mag
         
@@ -370,7 +372,9 @@ def get_pos_theta_for_note(f, root, root_radius, length):
     y = centery - r * math.cos(theta)
     return (x,y), theta
     
-def make_spiral_lines_from_notes(root, notes, length=75, root_radius=100):
+def make_spiral_lines_from_notes(root, notes, 
+                                 length=75, root_radius=100,
+                                 stroke_width_scale=15):
     """
     Is there a way to represent notes where octaves are still seperated but
     we can see notes of the same pitch?
@@ -388,7 +392,6 @@ def make_spiral_lines_from_notes(root, notes, length=75, root_radius=100):
     Is there a way to do this? Maybe not, eg we make 5th = 3r/2 opposite root
     and 3/2r = 9/4 != root and yet root still needs to be 180deg from it
     """
-    stroke_width_scale = 15
     width_gamma = 0.2  # we use width^this as the width 
     centerx, centery = (x / 2 for x in ui_opts.virtual_size)
     lines = []
@@ -480,7 +483,11 @@ def notes_changed(*args):
 
     default_foreground = 0x888888
     root = w.get_root_frequency()
-    all_svgs=[]  
+    all_svgs=[]
+    num_octaves = math.log(max_frequency / root, 2)
+    # let's scale note height and width with number of octaves we're drawing
+    note_length = 400.0 / num_octaves
+    note_width = 500 / 2**num_octaves
     # we'll set the background with a svg rect
     svg = raw_svg_to_group('<rect width="1500" height="1500" />', default_background)
     all_svgs.append(svg)
@@ -495,7 +502,7 @@ def notes_changed(*args):
             all_svgs.append(svg)
         
     if ui_opts.get_show_base_spiral():
-        overlay = make_spiral_octave_lines(root)
+        overlay = make_spiral_octave_lines(root, length=note_length)
         svg = raw_svg_to_group(overlay, default_foreground)
         all_svgs.append(svg)
         
@@ -503,7 +510,8 @@ def notes_changed(*args):
     width, height = ui_opts.virtual_size
 
     for notegroup, col in zip(w.notes, colors):
-        notegrp_svg = make_spiral_lines_from_notes(root, notegroup)
+        notegrp_svg = make_spiral_lines_from_notes(
+            root, notegroup, length=note_length, stroke_width_scale=note_width)
         notegrp_svg += '<circle r="{}" cx="{}" cy="{}"/>'.format(
             width / 30.0, width / 10.0 + width / 45.0 * math.sin(theta),
             width / 10.0 + width / 45.0 * math.cos(theta))
